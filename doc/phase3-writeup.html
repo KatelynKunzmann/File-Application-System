@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>CS 1653 Project P3 Writeup</title>
+  <style>
+    :root {
+      font-family: 'Poppins', Helvetica, Arial, Lucida, sans-serif;
+      font-style: normal;
+    }
+
+    h1 {
+      font-weight: 800;
+      text-align: center;
+    }
+
+    h2 {
+      font-weight: 700;
+      text-align: center;
+    }
+
+    h3 {
+      font-weight: 500;
+      text-align: center;
+    }
+
+    .img {
+      margin-top: 25px;
+      margin-bottom: 25px;
+      text-align: center;
+    }
+  </style>
+
+<body>
+<header>
+  <h1>CS 1653 Project Phase 3 Writeup</h1>
+  <h2>
+    <!-- BEGIN CHANGES HERE -->
+    <h3>
+      Taha Ahmad - taa95@pitt.edu
+      <br>
+      Katelyn Kunzmann - kak383@pitt.edu
+      <br>
+      Luke Milavec - lrm88@pitt.edu
+    </h3>
+    <!-- END CHANGES HERE -->
+  </h2>
+</header>
+<section id="overview">
+  <h2>Overview</h2>
+  <!-- BEGIN CHANGES HERE -->
+
+  <p>The system we are designing is for a company context with users who are employees and
+    company admins managing the system. Overall, our design is inspired by SSH. We are using a combination of RSA-2048
+    asymmetric protocol and Diffie-Hellman to provide mutual authentication and to come up with a shared secret,
+    which is then used to produce shared symmetric keys used as session keys with AES with 256 bit keys in CBC mode.
+    Public keys are verified out-of-band which is reasonable given a company scenario where out-of-band communication
+    is possible and expected.
+    <br>
+    The threat model for this phase requires: group server and user authentication, file server and user
+    authentication,
+    token integrity verification and protection against passive monitoring. The system uses RSA, SHA-256, HMACs, ECC,
+    and
+    AES to accomplish these goals. RSA is the standard solution for the key distribution problem which the system
+    uses, along
+    with a Diffie-Helman exchange, to create a shared symmetric key. This allows for users and servers to communicate
+    effectively
+    while preserving confidentiality using AES. SHA-256 and HMAC protocol are integral to the systems protocol because
+    it is used alongside RSA to ensure the integrity of the messages while in transit.
+  </p>
+
+  <!-- END CHANGES HERE -->
+</section>
+<section id="threat1">
+  <h2>Threat T1: Unauthorized Token Issuance</h2>
+  <!-- BEGIN CHANGES HERE -->
+  <p>
+    Threat 1 is the threat of the group server granting an illegitimate user a token they are not authorized to
+    have. If this threat was left unguarded, a user Alice could request a token for a different user, such as Bob, and
+    use it to get access to files she is not allowed to, undermining any sort of security function groups and tokens
+    have.
+    If Bob is an owner of a group, she could add other unauthorized users to a group or even delete it entirely along
+    with all of its files.
+    <br>
+    <br>
+    To make sure that tokens are only given to users that the token is assigned to, we will adopt an asymmetric
+    authentication protocol. To begin, all users will be created by an admin using the “cuser” command which will
+    create a username and add it to the list of users. The new user will log on to the client app with the username
+    and since no RSA keypair exists for them yet, an RSA-2048 bit keypair will be created, consisting of a private,
+    K<sub>u</sub><sup>-1</sup>, where u stands for user, and a public key K<sub>u</sub>.
+    The keypair will be stored on the clients machine and the private key will not
+    be shared or used in a way that requires it to ever sent over the network, so only the user will have it.
+
+
+  We chose RSA due to the level of assurance that has been established over the years
+  with its widespread use on the internet and a key size of 2048 because a 2048-bit key is the current NIST
+  recommended key size. No attacks more efficient than a brute force have been found so far, and brute-forcing
+  a 2048-bit key is infeasible given current computers and the poor time complexity of the fastest known factoring
+  algorithm.
+  <p>
+    Upon the user’s first connection to the group server, the user will send their public key to the server
+    which will store the public key in a list of public keys of users it keeps. A user who is able to prove they
+    have the private key associated with that public key will be given access to the token associated with
+    the account. Also, the first time the user connects to the group server, the server will display its
+    public key to the user and, similar to SSH, the user will be responsible for verifying out-of-band
+    with an Admin that the key is legitimate. The client app will maintain a list of
+    public keys of servers it has connected to in the past. This is reasonable because the company setting
+    means users have secure out-of-band options of getting/verifying the group server's key such as via company email
+    or via physical transfer of the file using a thumb drive since the admin also works at the company. The usability
+    of this system is reasonable as well because the key is cached for subsequent use, and this out-of-bound
+    verification is expected to be a one time thing. Caching will also allow employees to use the same user account
+    on multiple devices by transferring the keypair files and known servers directory using a thumbdrive or email out of 
+    band. A file system can be moved to a different machine in a similar fashion, which adds to the system's usability.
+  </p>
+  <p>
+    Establishment of a secure session over an insecure network will take place using Elliptic Curve Diffie-Hellman
+    adapted from the Bouncy Castle library. To initiate a connection to the server, the user will initialize a Bouncy
+    Castle
+    Elliptic Curve Diffie-Hellman (ECDH) key generator using the "secp256r1" elliptic curve. This curve is NIST
+    recommended and is in FIPS, and is generally considered safe. Some people worry that NIST may have implemented
+    a back door but that is unproven and no method of introducing backdoors is currently known. Plus, it is one of
+    the most commonly used curves today (Mathews).
+    Once it
+    is initialized, a key pair is generated giving the user a public (k<sub>ecu</sub>) and private
+    (k<sub>ecu</sub>
+    <super>-1</super>) key. The user will then send their public key, signed with their RSA private key,
+    to the server. The group server will compare the public key to the cached public key associated with the username
+    that the server stored upon the user's first connection. If the key matches, the group server will do the exact same steps,
+    initializing a Bouncy Castle ECDH key generator, generating a key pair ((k<sub>ecs</sub>), k<sub>ecs</sub>
+    <super>-1</super>), and sending the public key signed by its RSA private ke to the user.
+    Using a key agreement, their private ECDH key, and the public ECDH key recieved from each other, the user and group
+    server will
+    then generate a shared secret, K<sub>ab</sub>, which will be used to derive symmetric session keys (process
+    described in T3).
+  </p>
+  <div class="img">
+    <img src="./img/handshakeA.jpg" alt="Diagram of session establishment protocol.">
+  </div>
+
+  <p>Going back to threat 1, Alice, given that she does not have access to Bob’s private key in this scenario will not
+    be able to sign the ECDH public key she generated, and so the group server will not reciprocate by generating its
+    own ECDH public key and will therefore not be able to derive the shared secret to be able to get Bob's token. If
+    Alice attempts to login with Bob's username and generates a new keypair, the public key won't match the cached version
+    and the group server will deny the request.
+  </p>
+
+
+  <!-- END CHANGES HERE -->
+</section>
+<section id="threat2">
+  <h2>Threat T2: Token Modification/Forgery</h2>
+
+  <p>Threat 2 is the threat of a user modifying their token to grant them access to more groups/files than they should
+    or forging someone else’s token to impersonate them. Under the current model, Alice could properly authenticate
+    with the group server and get a token giving her access to the groups and files she is a member of. Let's say
+    Alice
+    has access to groups A and B as well as files 1 and 2, but then she modifies the token to also grant her access to
+    group C and file 3. This
+    is a problem because file 3 could contain sensitive information not meant for Alice. She could even add herself to
+    the admin group and delete users, add new illegitimate users to existing groups, and, in general, wreck the entire
+    system. Alice could also forge a token to look like another user to get access to the specific groups and files
+    the user has access to. Also, an attacker completely unknown to the system could theoretically create a token from
+    scratch that resembles the one produced by the Group server to obtain access that is unauthorized. This is
+    possible
+    under the current model because there is no mechanism for file servers to be able to determine whether or not a
+    token has been modified since the group server issued it.
+
+    Another issue is that tokens last indefinitely under the phase 2 model, which is problematic because users may be
+    deleted but still have valid tokens they can use to access information from groups they used to be a part of. A
+    user
+    removed from a group could still use an old token to access the group's files.
+
+  <p>The solution to the first half of the issue is using digital signatures to detect modified/forged tokens and
+    prevent
+    access when detected. The user and group server will first mutually authenticate and establish a shared secret as
+    described above in Handshake A, then the user will request a token using the shared secret. The group server will
+    create the token as before, but also hash the token using SHA-256 (to reduce the size) and sign the hash using its
+    private RSA key K<sub>s</sub><sup>-1</sup>. It will then send the token, the signature of the token, and the HMAC of the
+    message to the user. If an attacker modifies the token, the signature verification on the file server will fail and
+    access will be denied.
+  </p>
+  <p>
+    To tackle the indefinite token issue, we will add a timestamp field to the token in order to introduce and keep
+    track of the expiration. Tokens expire after 1 hour to ensure users are properly authorized by the group server
+    (for the demo, we will set token's to expire after 5 minutes). File servers will
+    reject any expired tokens and inform the user to request a new token from the group server.
+  </p>
+  <p>To use the token, the user will first mutually authenticate with the file server and establish a shared secret,
+    the process of which is described in threat 3. Once completed, the user will hand the token, the signature, and
+    a HMAC of the message to the file server which will then compute the HMAC to verify its integrity.
+    The file server will then verify the signature using the group server’s public key K<sub>s</sub>, compute the hash
+    using the same algorithm as the group server, and compare the two hashes to check for a match. The file server
+    will
+    have access to the group server’s public key because the user who creates the file server will register it with
+    the
+    file server. This is reasonable because there is only one group server to register, and the public key will be
+    available
+    to the user, either through accessing the group server for the first time, or by contacting the admin out-of-band
+    using the aforementioned channels.
+    Integrity of data is largely covered here by the signature but we include the HMAC to ensure integrity of origin
+    insofar
+    as to make sure it is the actual user sending it, and because it keeps messages consistent because HMACs are
+    necessary for other types of messages and keeping the HMAC simplifies the overall implementation.
+  </p>
+  <p><strong>Note: how specifially token serialization is handled in order to be able to encrypt/sign is described
+    in T4</strong></p>
+  <div class="img">
+    <img src="./img/token.jpg" alt="Diagram showing token acquisition protocol.">
+  </div>
+  <p>Now if Alice modifies a token, she will not be able to sign it because she does not have access to the group
+    server’s private key. If she signs it with her own key, the file server will not be able to decrypt it with the
+    group server’s public key and will refuse the token. An attacker could not forge a token or construct one
+    completely from scratch either because of the same reason. If the file server can verify the signature, it can be assured
+    that the token was created by the group server since the group server's public key worked and no one other than the 
+    group server has the group server private key. Finally, a deleted user could not continue to use a token indefinitely either
+    because it now expires.
+  </p>
+  <!-- BEGIN CHANGES HERE -->
+
+  <!-- END CHANGES HERE -->
+</section>
+<section id="threat3">
+  <h2>Threat T3: Unauthorized File Servers</h2>
+  <!-- BEGIN CHANGES HERE -->
+
+  <p>Threat 3 is the threat of a user attempting to connect to a file server "s", but they connect instead to a
+    malicious server impersonating "s". Under our current model, an attacker could set up a decoy server that
+    impersonates a
+    file server and a user could unwittingly upload sensitive files to it, essentially handing them to the attacker.
+    They
+    could also download a file thinking it is legitimate but instead be given malware. This is because users currently
+    connect to the file server and do not authenticate it in any way, instead just blindly handing it a token and
+    downloading/uploading files.
+  </p>
+
+  <p>We will secure this threat using the same approach described in T1 for the group
+    server, namely Handshake A. Signing the ECDH public keys is technically unecessary because the file server
+    only needs to prove they have a valid token, but we keep it for the sake of symmetry, to simplify our code, and
+    because
+    it will not hurt to keep it. The protocol and its algorithms with their key size choices are therefore identical.
+  </p>
+  <p>
+    The first time a user connects to a file server, it will display its public key which the user will be responsible
+    for verifying
+    out-of-band. This is a reasonable assumption because the system’s use-case is in a company setting where
+    users can contact the file server creator to verify the key either via secure company email or physical file transfer
+    using a thumb drive. The way this works is a hexstring of the public key is stored as a text file which can then be
+    shared using these methods. The client app will maintain a list
+    of public keys of file servers it has connected to in the past, so on subsequent connections to the file server,
+    the user will know the server’s public key. Notably, however, unlike the group server, there is no need for a file
+    server to cache user public keys since it gets all the verification information it needs via valid tokens.
+    <br>
+    Connections to a file server will be secured by doing the same method mentioned in Threat 1 with Elliptic curves
+    and Diffie-Helman, see T1 for details.
+  </p>
+
+  <p> An issue with the above implementation is that asymmetric ciphers are slow and are limited in the amount of data
+    they can encrypt. Therefore the rest of the session will be conducted using AES-256 symmetric key protocol with
+    CBC mode and PKCS7Padding. The block mode is CBC because it is secure against replay attacks unlike ECB, and
+    PKCS7Padding because it can handle different multiples of bytes and is a secure RFC standard padding scheme.
+    The encryption key for the AES-256 protocol will be K<sub>e</sub> =
+    SHA-256(K<sub>ab</sub> || “AES Confidentiality”).
+    The integrity key will be K<sub>i</sub> = SHA-256(K<sub>ab</sub> || “AES Integrity”). AES with CBC mode requires
+    generating an IV which needs to be identical for the user and the server. This is done by deriving a third key:
+    K<sub>iv</sub> = SHA-256(K<sub>ab</sub> || “IV Generator”) on both the server and client end, and using the first 16
+    bytes of the output as the iv. This way the entire key K<sub>ab</sub> is incorporated into the derivation even
+    though we only need 16 bytes. Normally these
+    symmetric keys would also concatenate an H value which is a hash of all of the messages that have taken place up
+    to this
+    point. This binds the mutual authentication to the session, but it is unneeded here because the Diffie-Helman key
+    exchange
+    already binds the session because the ECDH keypairs are thrown away right after the shared secret is created, and Kab
+    is thrown away
+    when the session ends. Once Ke and Ki are derived, every message sent between the client and servers will be
+    encrypted
+    by the sender using AES-256 in CBC mode with PKCS7Padding with K<sub>e</sub>.
+    The sender will also create an HMAC using the message m and K<sub>i</sub>
+    where HMAC(K<sub>i</sub>, m) = SHA-256( (K<sub>i</sub> ⊕ opad) || SHA-256( (K<sub>i</sub> ⊕ ipad) || m)). Because
+    SHA-256 is vulnerable to extension attacks, this HMAC scheme is used to prevent an attacker from modifying the
+    message
+    and extending the hash.
+  </p>
+  <p>SHA-256 is chosen for the HMAC because it is considered cryptographically secure (meaning it offers pre-image resistance,
+    second pre-image resistance, and collision resistance) and because it gives a 256-bit output which makes it easy to
+    derive keys for AES-256. We could have used another secure algorithm for HMAC and SHA-256 for the key derivation,
+    but that would add needless complexity.</p>
+  <div>
+    <strong>Please see Handshake A diagram in T1 for reference of this file server handshake.</strong>
+  </div>
+  <p>File server creation note: Since any random user can create file servers, the server’s name, port information,
+    and whether it is trustworthy is expected to be shared/determined out-of-band. This is reasonable because the
+    use-case for the system is assumed to be a company setting where contact out-of-band is possible via the secure
+    channels described in T1.
+  </p>
+  <p>Going back to the example, a user connecting to s can now be assured they are not actually connecting to an
+    impersonator because an impersonator would not be able to sign the ECDH public key they generate 
+    because they will not have s’s private key. If the impersonator signs it with their own private key, the user 
+    won't be able to verify the signature using the legitimate file server's public key which they have cached. 
+  </p>
+
+  <!-- END CHANGES HERE -->
+</section>
+<section id="threat4">
+  <h2>Threat T4: Information Leakage via Passive Monitoring</h2>
+  <!-- BEGIN CHANGES HERE -->
+
+  <p>Threat 4 is the threat that third party entities can listen in on communications between the client and
+    group/file servers(s). Under our phase 2 model, anyone snooping on messages between the client app and servers can
+    steal and use information because it is all sent in plain text. There is really no benefit to having tokens
+    currently because Alice can just listen to communications between Bob and the servers to steal his token and
+    impersonate him, modify messages such as tokens or files, or read every file being downloaded or uploaded.
+  </p>
+  <p>Many of the specific issues posed by threat 4 have already been handled by our solutions for thread 1-3. Before
+    getting any token or doing any meaningful work on a server (group or file), a user uses the RSA digital signatures
+    along with elliptic curve Diffie-Hellman to mutually authenticate and to establish a shared secret K<sub>ab</sub>
+    which is used
+    to derive AES-256 symmetric keys to provide confidentiality (with K<sub>e</sub>) and integrity (with K<sub>i</sub>)
+    for all communications. This is accomplished by encrypting each envelope with K<sub>e</sub> and generating an HMAC
+    on it with K<sub>i</sub>. Both the encrypted envelope and HMAC are packaged as a new object Message which means
+    an eavesdropper can't learn the commands being sent between the user and the servers and cannot read the contents
+    whether it is a file, a token, or something else.
+  </p>
+  <p>
+    In order to transmit objects like Token and array lists, we use Java's default serialization. In order
+    to prevent attackers from modifying the serialized object to try to conduct a deserialization attack, every
+    message sent across the network will have the aforementioned HMAC along with it to verify integrity. To get around Java's
+    serialization being non-deterministic we verify the HMAC before deserializing so if the message is modified, it
+    is never deserialized.
+  </p>
+
+  <p>Under the trust model for phase 3, group and file servers are assumed to be secure, and the only snooping threat
+    is in transit. Every message passed between the user and the group server and the user and a file server are encrypted
+    with K<sub>e</sub> meaning no attacker in the middle can read or steal files or tokens unless they can derive
+    K<sub>e</sub>. K<sub>e</sub> is derived from K<sub>ab</sub> by concatenating K<sub>ab</sub> with a constant
+    and hashing the result using SHA-256. Since SHA-256 is cryptographically secure it offers pre-image resistance
+    so a passive attacker listening in would not be able to derive K<sub>ab</sub> even knowing K<sub>e</sub> and the constant.
+    K<sub>ab</sub> is derived from a key-agreement using transient ECDH keypairs which in turn are derived from long term
+    RSA keypairs. RSA private keys are never sent over the network, so the attacker does not have access to the server
+    or user's private RSA key under this threat model, which means they cannot do these derivations to arrive at K<sub>e</sub>
+    and steal a file or token. K<sub>i</sub> offers protection against an active attacker which is not currently in the
+    threat model.
+  </p>
+
+  <!-- END CHANGES HERE -->
+</section>
+<section id="discussion">
+  <h2>Discussion</h2>
+  <!-- BEGIN CHANGES HERE -->
+
+  <p>These mechanisms work in tandem to ensure confidentiality and integrity while exchanging information.
+    Handshake A ensures a secure key exchange between client and server while AES and HMACs ensure secure
+    communication.
+    This core design addresses the T1,T3 and T4 while T2 is covered by the use of a signed version of the token. Our
+    group came
+    to this solution by iterating upon our design with each added threat. First, Handshake A as our solution to T1
+    provided a basis
+    for server-client key exchange. Our solution to T3 and T4 built on this idea by using AES and HMACs along with the
+    shared key generated
+    in Handshake A. To incorporate T2 required a modification to Handshake A for the file server and user to use in
+    which the user sends a
+    token signed by the group server to ensure the integrity of the token. We later addressed information leakage and
+    integrity issues with
+    Tokens by serializing the Token using SealObject and adding a timestamp field to Tokens for the purpose of
+    tracking expiration.
+  </p>
+  <p>
+    In terms of the design process, we initially thought about implementing a password system, and we even came up with
+    a salting and hashing scheme to store passwords securely, but the fundemental issue with users tending towards picking
+    poor passwords led us to abandon this avenue. We settled on Diffie-Hellman pretty quickly after that but initially
+    were thinking of using modular exponentiation. However, we switched to Elliptic Curve Diffie-Hellman because it
+    requires smaller keys which allowed us to remove a hashing step and because Bouncy Castle had a easy to use ECDH
+    class. The initial curve we selected was "secp256k1", a Koblitz curve, but eventually decided against it since it does
+    have some vulnerabilities that make it a few bits weaker than what we ultimately chose, "secp256r1". We also initially
+    considered using Java SealedObject to serialize objects to enable encryption because it seemed from the documentation
+    that it was secure, but after looking at the source code we realized it was actually using the default Java serialization.
+    Instead, we decided to use the default Java serialization ourselves which gave us more flexibility, and we mitigated its
+    downsides by deserializing only after verifying an HMAC. Finally, given that we had decided against passwords, but 
+    the SSH key method is much yes usable in it's initial form, so we incorporated key caching and mechanisms for using the system
+    from different machines.
+  </p>
+
+
+
+  <!-- END CHANGES HERE -->
+</section>
+
+<section>
+  <h2>Citations</h2>
+  <p> Matthews, R. Ruggero. (1965, January 1). Why is there the option to use NIST P-256 in GPG? Cryptography Stack Exchange. Retrieved November 9, 2022, from https://crypto.stackexchange.com/questions/52983/why-is-there-the-option-to-use-nist-p-256-in-gpg </p>
+  <p>otus (1961, November 1). Is SECP256R1 more secure than secp256k1? Cryptography Stack Exchange. Retrieved November 9, 2022, from https://crypto.stackexchange.com/questions/18965/is-secp256r1-more-secure-than-secp256k1 </p>
+</section>
+</body>
+
+
+</html>

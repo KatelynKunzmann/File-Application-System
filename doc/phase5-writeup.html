@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>CS 1653 Project P5 Writeup</title>
+    <style>
+    /* BEGIN CHANGES HERE */
+
+
+    /* In this section, you may add CSS styling if desired */
+    header {
+      text-align: center;
+    }
+
+    :root {
+      font-family: 'Poppins', Helvetica, Arial, Lucida, sans-serif;
+      font-style: normal;
+      width: 70%;
+      padding-left: 15%;
+    }
+
+    h1 {
+      font-weight: 800;
+      text-align: center;
+    }
+
+    h2 {
+      font-weight: 700;
+      text-align: center;
+    }
+
+    h3 {
+      font-weight: 500;
+      text-align: center;
+    }
+
+    .img {
+      margin-top: 25px;
+      margin-bottom: 25px;
+      text-align: center;
+    }
+
+
+    /* END CHANGES HERE */
+  </style>
+<body>
+<header>
+    <h1>CS 1653 Project P5 Writeup</h1>
+    <h2>
+        <!-- BEGIN CHANGES HERE -->
+        <h3>
+            Taha Ahmad - taa95@pitt.edu
+            <br>
+            Katelyn Kunzmann - kak383@pitt.edu
+            <br>
+            Luke Milavec - lrm88@pitt.edu
+          </h3>
+        <!-- END CHANGES HERE -->
+    </h2>
+</header>
+<section id="overview">
+    <h2>Overview</h2>
+    <!-- BEGIN CHANGES HERE -->
+
+
+    <p>Our threat model adds three new threats - two different types of denial of service attacks and a file modification attack.
+        The threat model allows for a user to overload the server through a process of flooding the server with 
+        computationally asymmetric requests, a user or users to occupy all space on a file server by uploading one
+         or more large file(s), and a file server to modify user files without detection from the user. The countermeasures
+         include computational puzzles, group storage limits, file size upload limits, and the generation, storage, and verification
+         of HMACs for each file stored. These countermeasures handle this new suite of threats one by one in order 
+         to provide a more secure system.</p>
+
+    <!-- END CHANGES HERE -->
+</section>
+<section id="threatmodel">
+    <h2>Threat Model</h2>
+    <!-- BEGIN CHANGES HERE -->
+
+    
+    <p><strong>T8: Too Many User Requests</strong></p>
+    <p>A user may maliciously overload the group server or file servers with requests, attempting to take up all
+        server computational power to prevent legitimate users from accessing their
+        services. Countermeasures must ensure that a single user with comparable physical resources as the server
+        is not able to singlehandedly flood a server with so many requests that the server is unable to respond
+        to other users. This threat does not encapsulate a scenario where a large number of legitimate users
+        access a server at the same time causing it to become overwhelmed, or when a user with much more computational resources
+        than the server (like a super computer) or multiple users conspire to send a malicious amount of requests
+        – it is just stipulating that no single user should be able achieve the same thing given a similar level of
+        resources as the server. </p>
+    
+    <p><strong>T9: File Server File Modification</strong></p>
+    <p>File servers are not trusted entities so a malicious file server could modify the file without
+        the user's knowledge. The counter measure should allow a legitimate user to verify the integrity of a file 
+        they have access to and ensure it is the same as the one uploaded by them or another group member. This threat does not 
+        encapsulate preventing the file server from making the modification, just verifying whether or not 
+        a modification has been made.</p>
+    <p><strong>T10: File Size Limits and Group Storage Space Limits</strong></p>
+    <p> A user may maliciously attempt to upload an extremely large file and/or many files of normal size to attempt to occupy all the 
+        storage space of a file server. This would lead to the inability of legitimate users to upload their files, 
+        thereby conducting an attack on availability. The countermeasure must not delete files to make space, 
+        since an attacker can continuously upload file(s) after deletion. This threat does not include the scenario when
+        legitimate users of a lot of different groups upload a lot files and end up using the remaining 
+        available storage space on the file server, but if it is predominantly one group who has used the 
+        majority of the space, this is not acceptable and should be handled appropriately. 
+       </p>
+    <!-- END CHANGES HERE -->
+</section>
+<section id="attack">
+    <h2>Attacks</h2>
+    <!-- BEGIN CHANGES HERE -->
+    
+    <p><strong>Threat 8 Attack:</strong></p>
+    <p>
+        One version of the attack does not even require the user to complete a handshake with the server. 
+        To conduct this attack, the user would generate a random number of length 2048 bits 
+        (the same as a public key) as well as another random 256-bit number to pose as a 
+        digital signature (256 bits since our signature uses SHA-256 as the hash). The user 
+        would then send these 2 numbers to the server as a new connection request repeatedly. 
+        This could be automated to be as fast as possible with an attack script which sends the 
+        connection requests. The way our implementation works, the server would spin up a new thread 
+        to handle the connection, check whether a matching public key is cached (requiring file I/O which is slow), 
+        and since it would most likely not find a match, it would cache it assuming that this is a new client’s 
+        first connection (which is again slow file I/O). The server would then verify the signature using the 
+        given public key which will fail, so it will return an envelope with a “Fail” message. The malicious 
+        user does not need to look at this response because its goal was just to make the server spin up a new 
+        thread (which takes time and space) and do time-consuming file I/O and public key cryptography. Since 
+        the user has to do very little work (just send connection requests) compared to the server, there 
+        is a resource disparity meaning it could overwhelm the server even with a weaker system.
+    </p> 
+    <p>
+         Along the same veins, another attack could have the user connect to a group server g, get a 
+         legitimate token, connect to file server f, and have the attack script repeatedly ask to download 
+         an existing file with the token (via command download &ltsrcFile&gt &ltdestFile&gt &ltgroupname&gt where 
+         the srcFile and groupname are legitimate) causing the file server to have to read the entire file 
+         and send it over chunk by chunk. The attacker would just ignore the server responses to save having to work.
+         The attack again works because a resource disparity exists between the user and the file server 
+         meaning the user has to do very little work each request (just send the download request which is one network write) 
+         while the server has to do time-consuming file I/O and multiple network I/O each time. Right now, our implementation
+         has no protection against attacks of this type on this command or others.
+    </p> 
+    <p><strong>Threat 9 Attack:</strong></p>
+    <p>The attack for a file server to make modifications to a file without being detected is quite straightforward. 
+        If user u uploads file f to file server s, s may modify f in order to corrupt the file, attempt to insert 
+        false information, or remove information. This attack could allow for a file server to modify files 
+        for any malicious purpose. This is possible because the files are stored locally on the system so the 
+        file server can change anything as they please. Since f is encrypted with AES-256 in CBC mode, s might 
+        not be able to make targeted changes to the file, but any modifications would be undetected currently 
+        by our system and the user themselves might not notice a change if the file format is unstructured to 
+        begin with.</p>
+    <p><strong>Threat 10 Attack:</strong></p>
+    <p>The attack consisting of either a user or users uploading one or more large file(s) in order to 
+        exhaust all file server storage space is currently possible. Our implementation does not prevent 
+        this attack because we have no size limits on uploads. One such attack could be a user generating
+        an exceedingly large file by writing random bytes to a text file and then uploading it on a file server to a 
+        group their are legitimately a part of. Another version could involve generating multiple such large files
+        and uploading them in a similar fashion until the file server has no more room and uploads begin to fail. 
+        Multiple malicious users from a group could also upload files that end up taking up all storage space
+        on the file server (the steps again would be similar). 
+        </p>
+
+    <!-- END CHANGES HERE -->
+</section>
+<section id="countermeasure">
+    <h2>Countermeasures</h2>
+    <!-- BEGIN CHANGES HERE -->
+
+
+    <p><strong>Threat 8:</strong></p>
+    <p>	To counter this threat, it is essential to even out the resource disparity between the user and the 
+        server so that there isn’t a situation where the user can make the server do a lot of work based on 
+        little computational investment by the user. To do this, the server will force the user to solve a 
+        hash inversion computational puzzle to prove the user’s investment in the request before 
+        doing any serious work. On every request, including
+        the one to connect, the client will send the request to the server. The server will respond by generating the puzzle 
+        and sending it to the user to solve. The user will solve it and send the solution back which the 
+        server will verify before fulfilling the original request. 
+    </p>
+        <p>More specifically, once the request from the client is recieved, the server will pick a puzzle length
+            integer n, randomly select an integer r of n bits, compute H(x) = SHA-256(r), and send over 
+            n and H(x). At the moment of sending, the server will also start a timer of 3 minutes using a timestamp.
+            If 3 minutes runs out before the user responds the thread will be closed. The user will
+            brute force search for an n-bit number r such that SHA-256(r) = H(x). Once found, the user will
+            send r to the server. The server will verify that
+            the r the user returned matches with the original. If so, the server will resume and complete the rest of the
+            request as normal.If not, the server will reject the request.
+        </p>
+        <p>
+            The user could repeatedly ask for computational puzzles forcing the group server to spin up a thread
+            at least and maintain the original request while it is waiting for the user to return the solution.
+            So while the server would not be wasting any CPU time, it would be using up memory resources.
+            The time limit of 3 minutes is there to limit the amount of threads and state the server has to maintain,
+            and this limit can be adjusted based on testing to make it so a single user cannot create enough requests
+            to overwhelm the memory resources of the server within the time limit. Why this was done this way over a
+            stateless server approach is explained in the conclusion.
+        </p>
+        In order for this computational puzzle idea to work, the puzzle must have the following qualities:
+        <ol>
+        <li>It is easy for the server to generate - the server just has to pick a number of length n randomly and do
+             one SHA-256 hash to generate H(x) which is fast.
+        </li>
+        <li>It is hard for the user to solve - since SHA-256 is a secure cryptographic hash it offers pre-image resistance
+            meaning the user cannot easily get r from H(x). The fastest way would be to brute force it which on average would
+            take the user O((2<sup>n</sup>)/2) = O(2<sup>n</sup>) (where n is the number of bits of r), 
+            to compute which is exponential and slow. The value of n is set by the server to be time-consuming but not super
+            slow as to make each request take unreasonably long. The exact value can be determined via testing, though it does
+            rely on the assumption that clients all have relatively similar computational resources. It is hard to pick an initial
+            value without implementation and testing which we are not doing this phase so a tentative starting number might be n = 11
+            which would mean 2<sup>10</sup>/2 = 1024/2 = 512 guesses on average but this might be too high or low. The advantage of 
+            this approach is that the difficulty is easily adjustable. 
+        </li>
+        <li>It is easy for the server to verify the solution - the server just has to compare two numbers to verify the puzzle.</li>
+        </ol>
+        <p>Overall, with a large enough n, the user is forced to invest a lot of computational time before the server has to do 
+            any significant work. The result will be the elimination/reduction of the resource disparity (described above) that 
+            existed between the user and server. Going back to the attack, each request by the user will take significantly more
+            computational time so a single user with similar computational resources as the server will not be able to flood
+            a server with too many requests like before. The time limit will prevent a user from asking for too many computational 
+            puzzles. 
+        </p>
+    
+    <p><strong>Threat 9:</strong></p>
+    <p>In order to provide integrity verification on files uploaded to file servers, the user who 
+        uploads the file will also send an HMAC to the file server to be verified by any other user 
+        that downloads the file. The HMAC will be a HMAC(f || k) where f is the encrypted bytes of 
+        the file (encrypted in the same way as described originally in T6) and k is HMAC(group key || “File Integrity”). 
+        The group key will be from the keyring of the same index used to encrypt the file. 
+        Like everywhere else in the project, SHA-256 will 
+        be the algorithm used to generate the HMAC. The client will compute this HMAC for the first chunk and then
+        for subsequent chunks concatenate the chunk bytes to the previous HMAC before doing the HMAC on the result. 
+        The file server will store the resulting HMAC in the ShareFile alongside the other metadata, and then send it to users upon completing download.
+         Users will compute the HMAC in the same way as 
+        the file is being downloaded and will then verify it with the HMAC stored on the file server after the download has completed.
+        <br></br>
+        This ensures that the file server cannot modify the file because it will result in the HMAC verification turning up false.
+        The group keys usage in the HMAC ensures the file server cannot tamper with the HMAC without corrupting its validity because
+        it doesn't have access to the group key to be able to update the HMAC. 
+    </p>
+    <p><strong>Threat 10:</strong></p>
+    <p>To prevent this threat, storage space limits and file size limits upon upload must be enforced. 
+        In the case for file size limits, there will be a byte limit for each upload. The file server 
+        will actively monitor the bytes being received and will stop uploading if that byte limit is 
+        reached. The code implementation of this can be included in FileThread.java, where the envelope 
+        message received equals “UPLOADF.” In the while loop where the uploading is conducted, a 
+        variable that keeps track of the bytes being received will be constantly updated. A condition 
+        for the while loop will be added to check this byte limit variable while uploading is occurring. 
+        Hence, once that byte limit variable is reached, the while loop will be stopped and a message 
+        indicating that limit has been reached will be portrayed to the user. If the entire contents of 
+        the file were not uploaded when the limit was reached, then a “FAIL” message will be sent to the 
+        client side. In the edge case where the entire contents of the file were uploaded and the limit 
+        was reached, neither a “FAIL” message nor a prompt will appear, since upload was successful and 
+        it did not exceed the limit.
+        </p>
+    <p>
+        In the case of storage space limits, there will be a limit on file server space for each group. 
+        This will ensure groups cannot upload large amounts of files, unfairly occupying the majority 
+        of the file server space. In order for the file server to enforce this limit, it must actively 
+        maintain each group’s currently occupied storage spaces and their applicable limits. The file 
+        server will maintain a text file for each group that is updated upon each upload and deletion 
+        (adding the space used up by the upload upon successful upload and subtracting from it upon 
+        successful deletion). This group storage management file will be stored locally by the file 
+        server so will only be accessible by it. The limits will be hardcoded into the file server 
+        in FileServer.java, so upon instantiation of a new file server, a group storage management 
+        file is also created and associated with that file server and the limits will be automatically 
+        written into this file once created. So the owner of the file server can decide what limit to 
+        set per group. Similarly to file size limits, the code implementation for storage space limits 
+        will be included in FileThread.java. 
+    </p>
+    <p>
+        If a user requests to upload a file, their group name will also be sent in that message, 
+        the file server will then check if that group has reached their limit yet by referring 
+        to its group storage management file.  This check will occur in the while loop statement 
+        in the “UPLOADF” message code along with the file size limit check. This ensures that 
+        while a file is being uploaded, both the file size and the group storage space is continuously 
+        being checked for each byte uploaded. If the group storage space limit has been reached and 
+        the entire file contents were not uploaded, then a “FILE-SPACE-LIMIT-REACHED” message will 
+        be sent to the client side and a prompt indicating their group storage space limit has 
+        been reached will be shown to the user. The user will then be prompted with the option 
+        to delete the incomplete file they attempted to upload or to keep it on the server. 
+        In the edge case where the entire file contents were uploaded and the group storage 
+        space limit was reached, but not exceeded, then no “FAIL” message will be sent, only 
+        a prompt indicating their group storage space limit has been reached will be shown to the user. 
+    </p>
+    <p>
+        If a user requests to delete a file, their group name will also be sent in that message, 
+        the file server will then proceed to delete that file and accordingly update that group’s 
+        current occupied storage space in the group storage management file upon successful deletion.
+    </p>
+
+    <!-- END CHANGES HERE -->
+</section>
+<section id="discussion">
+    <h2>Discussion</h2>
+    <!-- BEGIN CHANGES HERE -->
+    <p>Threat 8 and threat 10 are realistic for a real-life file sharing system. 
+        Threat 8 is essentially a DOS attack, which occurs rather frequently in reality. 
+        The threat 8 solution of the hash inversion computational puzzle was the most formidable solution 
+        we could reasonably implement. In reality, to mitigate against this threat fully, which often takes 
+        the form of a DDOS instead, requires companies to outsource the protection to a dedicated service
+         such as CloudFlare, which provides active and more secure measures to prevent this type of attack.
+         We, unfortunately, did not have the budget to afford this solution. Threat 10, which is the threat
+         of large files exceeding file server space quickly, has a simple and effective solution by utilizing
+        the upload and deletion checks. Therefore the threat is realistic, attackers could and would attempt 
+        something like this in reality, and its solution is realistic to implement too.
+         Threat 9 consists of protecting against a malicious file server modifying files. This is a realistic threat
+         since the file server is decentralized and untrusted. HMACS are often used in reality and have the benefit of 
+         being a quick way to verify no data has been corrupted, as opposed to using signatures and asymmetric cryptography.
+         </p>
+        <p>Originally for T10 we were considering if there was any way to prevent a rogue file server from modifying any files
+         but it didn't seem possible since it can always flip bits even with an HMAC. We could only think of a solution 
+         that lets the user detect any modification. For T8, we originally planned on using the stateless approach for computational
+         puzzles with the server handing off the state in encrypted form to prevent attackers from using up the server's memory
+         by asking for endless puzzles. However, that solution wouldn't work well from a usability standpoint
+         in this context if we closed the thread and had the user re-connect, so we landed on the time limit idea instead. 
+        </p>
+        <p> In terms of interplay between our solutions and previous threats, the utilization of the HMAC
+            interplays directly with our T6 implementation. We were already creating and managing group keys in a keyring
+            so it was simple to use the group key to derive a new integrity key with most of the logistics having already been handled. 
+            The sequencing of messages, implemented for Threat 5, continues to protect against any replay and reordering attacks,
+            and messages are still protected from modifications. The new messages being added such as the added transmission of the
+            group name in T10 still fulfill T4 since all messages are still encrypted in transit. The computational puzzle
+        exchange happens before requests now, but all normal request information (once puzzle is verified) is still encrypted ike
+    in the past, and the handshake is identical too.</p>
+    </p>
+
+    <!-- END CHANGES HERE -->
+</section>
+</body>
+</html>

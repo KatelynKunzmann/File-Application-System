@@ -1,0 +1,4 @@
+Once inside src/ folder,
+
+COMPILE: javac -cp .:/afs/cs.pitt.edu/usr0/bill/public/bcprov-jdk18on-172.jar *.java
+

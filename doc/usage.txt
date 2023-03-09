@@ -1,0 +1,68 @@
+FileSharing Usage Information
+USAGE:
+cd into src directory
+
+Start the Group Server: 
+    In a terminal, type "java RunGroupServer -cp .:/afs/cs.pitt.edu/usr0/bill/public/bcprov-jdk18on-172.jar [(optional) port number]"
+    - When the group server is first started, there are no users or groups. 
+    - Since there must be an administrator of the system, the user is prompted 
+    via the console to enter a username. This name becomes the first user and is a member of the ADMIN group. No other groups exist. 
+    - The group server will by default select (and print out) a random port, but a custom port can be passed as the first
+    command line argument.
+
+Start the File Server: 
+    In a terminal, type "java -cp .:/afs/cs.pitt.edu/usr0/bill/public/bcprov-jdk18on-172.jar RunFileServer [(optional) port number]" 
+    - The file server will create a shared_files directory inside the working directory if one does not exist. 
+    - The file server is now online. The file server will by default select (and print out) a random port, but a custom port can be passed as the first
+    command line argument.
+
+Reset the File server:
+    - Delete file named FileList.bin 
+    - Delete directory named shared_files
+
+Reset the Group Server:
+    - Delete file named UserList.bin 
+    - Delete file named GroupList.bin
+
+
+ Starting Client App:
+    1)  In a terminal, type "java -cp .:/afs/cs.pitt.edu/usr0/bill/public/bcprov-jdk18on-172.jar ClientTerminalApp"
+    2)  There will be a prompt for login, type whatever username you desire
+            - Typing ADMIN makes you administrator and you will have admin privileges
+    3)  All command options will be listed
+    
+    Commands:
+        help                                                    Shows the list of valid commands.
+        relog                                                   Re-login to app, perhaps to change accounts.
+        connect <-f or -g> <server> <port>                      Connect to a file or group server at the port specified.
+        disconnect                                              Disconnect current connection to file and/or group server.
+        group commands:                                         Must be connected to group server. Commands other than gettoken require valid token.
+            gettoken <servername>                               Fetch a token for the user that is logged in for a given server.
+            cgroup <groupname>                                  Create a group named <groupname>.
+            cuser <username>                                    Create a user named <username>.
+            dgroup <groupname>                                  Delete the group specified by <groupname>.
+            duser <username>                                    Delete the user specified by <username>.
+            adduser <username> <groupname>                      Add user <username> to group <groupname>.
+            ruser <username> <groupname>                        Delete user <username> from group <groupname>.
+            listmembers <groupname>                             List all members of <groupname>.
+        file commands:                                          Must be connected to a file server. Commands require valid tokens
+            download <sourceFile> <destFile>                    Download <sourceFile> from server and saves it as <destFile>.
+            upload   <srcFile> <destFile> <group>               Upload <sourceFile> to file server as a file of <group>.
+            listfiles                                           List all files that the logged in user has access to via their token.
+            delete <filename>                                   Delete file <filename> from server.
+        q                                                       Close the application.
+
+For the Extra-Credit GUI Client App:
+    run "java ClientSwingApp" on the terminal
+
+    Type ADMIN or another username into the dialog box that pops up to login
+
+    There are two tabs on the top left of the box that pops up: 
+        1. Group Server
+        2. File Server
+
+        Click on the tab to view commands for the server. Click on a button to run a command, 
+        and enter any information it asks for if a dialog box pops up. The commands work
+        the same as ClientTerminalApp which is described above.
+
+        Responses from the client app or server are shown in the gray panel to the right. 

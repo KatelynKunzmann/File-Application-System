@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>CS 1653 Project P4 Writeup</title>
+  <style>
+    /* BEGIN CHANGES HERE */
+    
+
+    /* In this section, you may add CSS styling if desired */
+    header {
+      text-align: center;
+    }
+
+    :root {
+      font-family: 'Poppins', Helvetica, Arial, Lucida, sans-serif;
+      font-style: normal;
+      width: 70%;
+      padding-left: 15%;
+    }
+
+    h1 {
+      font-weight: 800;
+      text-align: center;
+    }
+
+    h2 {
+      font-weight: 700;
+      text-align: center;
+    }
+
+    h3 {
+      font-weight: 500;
+      text-align: center;
+    }
+
+    .img {
+      margin-top: 25px;
+      margin-bottom: 25px;
+      text-align: center;
+    }
+
+
+    /* END CHANGES HERE */
+  </style>
+
+<body>
+  <header>
+    <h1>CS 1653 Project P4 Writeup</h1>
+    <h2>
+      <!-- BEGIN CHANGES HERE -->
+      <h3>
+        Taha Ahmad - taa95@pitt.edu
+        <br>
+        Katelyn Kunzmann - kak383@pitt.edu
+        <br>
+        Luke Milavec - lrm88@pitt.edu
+      </h3>
+      <!-- END CHANGES HERE -->
+    </h2>
+  </header>
+  <section id="overview">
+    <h2>Overview</h2>
+    <!-- BEGIN CHANGES HERE -->
+
+    
+    <p>
+      Our approach for threat 5 is partly covered from our phase 3 implementation due to a combination of
+      shared session keys expiring after each session (which tackles replay attacks between different session)
+      and HMAC verification with an integrity key (which tackles modifications).
+      With the addition of message sequencing we can adequately detect and prevent in session reorder and replay
+      attacks in our phase 4 plan. T6 is handled by introducing group keys used to encrypt files while they are on
+      a file server, and T7 is handled by adding an intended recipient field to each token.
+    </p>
+
+    <!-- END CHANGES HERE -->
+  </section>
+  <section id="threat5">
+    <h2>Threat T5: Message Reorder, Replay, or Modification</h2>
+    <!-- BEGIN CHANGES HERE -->
+
+    <p>
+      This threat involves an attacker manipulating network traffic to their advantage.
+       Under our phase 3 implementation, the attacker will not be able to read messages
+      in transit because all communications are encrypted, but they could still potentially
+      reorder or modify messages before they reach the recipient. They could also simply
+      impersonate the sender by resending encrypted messages to the intended recipient,
+      conducting a replay attack. If perhaps they re-sent an old delete request,
+      they could delete a new user/file, or recreate a deleted group by replaying a
+      create group command. This attack could lead to greater attacks down the line
+      since the attacker could build trust by manipulating these communications and
+      adding themselves to a group. After acquiring this trust, the attacker could
+       now have unauthorized access to files and perform unauthorized commands.
+    </p>
+    <p><b>Message Modification:</b> is already handled in our current implementation because
+       the Elliptic Curve Diffie Hellman results in a shared secret session key K<sub>ab</sub>, we
+       use it to derive an integrity key K<sub>i</sub> which is then used in an HMAC. K<sub>i</sub> is generated
+       using a cryptographically secure hash function on K<sub>ab</sub> concatenated with a constant.
+       More specifically, K<sub>i</sub> = SHA-256(K<sub>ab</sub> || “AES Integrity”). This is secure because 
+       SHA-256 is a cryptographically secure hash function and offers pre-image resistance 
+       so an attacker cannot get back K<sub>ab</sub> from K<sub>i</sub> and it is similarly infeasible for an 
+       attacker to modify the message in a way that results in an identical HMAC because 
+       SHA-256 also offers 2nd-preimage resistance. This HMAC is generated and sent along 
+       with every message that is transmitted over the network. Any modification by an 
+       attacker will result in an unsuccessful verification of the HMAC by the recipient 
+       who will refuse the request. So if Eve modified a message between Alice and Bob, 
+       she will not be able to update the HMAC because she does not have K<sub>i</sub>.</p>
+       
+    <p>
+      <b>Message Reordering:</b> is not being handled in our phase 3 implementation.
+        To fix this, we plan to incorporate message sequencing
+        into our phase 4 implementation. Our handshake expects messages (such as 
+        keys, signatures usernames, etc.) in a specific order and, therefore, 
+        the handshake will already fail if any reordering happens. 
+        Following the handshake, both the client and server will implicitly maintain a 
+        sequence number, starting at 0 and incrementing by 1 on each new message sent or 
+        received. The sequence number will be concatenated to the message before computing 
+        the HMAC, and the recipient will do the same before verifying it 
+        (HMAC(message || sequence number)).  If verification fails, we will default to 
+        assuming there was a reorder and/or replay attack and refuse the request. 
+        Maintaining a synchronized sequence number implicitly will not be an issue since 
+        input.read() and output.write() are blocking. 
+    </p>
+    <p>In short, sequences of messages will not line up if an attacker attempts a replay 
+      and/or reorder attack so if Eve replays an old create group command, the HMAC generated 
+      by the server will be different than the one in the message and the request will be denied. 
+    </p>
+    <p>One additional thing we will add now that there is an active attacker is that each party 
+      will verify the other side has arrived at K<sub>ab</sub> by sending an HMAC( their own name || K<sub>ab</sub>) to 
+      each other before we move on to using K<sub>ab</sub> (so two arrows after the key agreement arrow). 
+      Now the other party will know if the handshake was not completed if an active attacker 
+      intercepts it. 
+    </p>
+    <div class="img">
+      <img src="./img/handshakeAP4.jpg" alt="Diagram of session establishment protocol.">
+    </div>
+    <p><strong>Replay attacks:</strong>
+      Currently, our implementation has some protection against replay attacks because of 
+      the use of Elliptic Curve Diffie Helman exchange and the subsequent temporary use of 
+      the shared secret K<sub>ab</sub> which is then used to derive the session keys. 
+      This shared secret is thrown out after each session and a new ECDH exchange 
+      happens for each new session which ensures unique communication for each session. 
+      If an attacker attempts to replay messages from an earlier communication that they 
+      recorded, they will be unsuccessful in communicating any further since that original 
+      shared secret K<sub>ab</sub> does not exist anymore so the message will never be 
+      verified and the client/server connection will be terminated. 
+    </p>
+    <p>Replays within a session are not protected against currently, but the sequencing 
+      mechanism described in "message reordering" will also handle this threat. This is 
+      because verification of a replayed message's HMAC would fail since the recipient’s 
+      sequence number does not match the one in the original message. An attacker cannot
+      modify the sequence number to conduct a replay attack because they cannot recompute
+      the HMAC as described above.
+    </p>
+
+    <p>Overall, the combination of incorporating HMACs and sequencing in all exchanges 
+      happening over the network means that attackers will not be able to modify, reorder, 
+      or replay messages. </p>
+
+    <!-- END CHANGES HERE -->
+  </section>
+  <section id="threat6">
+    <h2>Threat T6: File Leakage</h2>
+    <!-- BEGIN CHANGES HERE -->
+
+    <p>File servers can be created and maintained by any user thus a malicious user could, currently, 
+      freely access any files that are stored on the file server. For example, Bob created file server 
+      alpha and Alice stored file f on alpha. Bob can now open f because it is stored unencrypted on his machine. 
+
+      <p>In order to ensure confidentiality in regards to any prying administrative eyes, files need to be encrypted 
+        with a shared key known only to the group. This group key will be generated and distributed by the group 
+        server during the acquisition of a token but outside of the token since the user needs to access the keyring freely.
+        If it was in the token, it would be handed to the file server along with any request which would defeat its purpose
+        since the whole point is to prevent the untrusted file server from reading any files. A key challenge with this
+        approach however is managing the deletion of users or their
+        removal from a group. A deleted/removed user will have the old key so new files added to the group
+        need to encrypted with a new key.
+        To solve this, the shared key will also be accompanied by an index which will be used to track the version
+        of the shared secret. Anytime a new user is added to a group, they will receive all group key versions and 
+        store them on their machine. When a user is removed from a group the group server will increment the key 
+        version number and create a new randomly generated 256 bit key (using Secure Random). The encryption of
+        files will be done by the user uploading it using the same standard symmetric algorithm from the previous phase
+        (AES 256 in CBC with HMAC) using the most recent group key. AES-256 in CBC mode is chosen because AES-256 is considered
+        cryptographically secure and its use is widespread. The block mode is CBC because it is secure against replay attacks
+        unlike ECB, and PKCS7Padding because it can handle different multiples of bytes and is a secure RFC 
+        standard padding scheme. The HMAC is standard for all messages and verifies that the keyring was not modified in transit
+        and was created by the group server (only the group server knows the shared secret K<sub>ab</sub> and K<sub>i</sub> used 
+        in the HMAC).
+        The encrypted file will be stored on the file server along with the key version number. Upon download, 
+        group members will decrypt the file using the correct version key for the file. 
+      </p>
+      <p>This mechanism hides the contents of files from file server admin by encrypting the file 
+        with a key unknown to the file server before storage. The group server can be trusted for 
+        key generation and distribution because the group server stores the canonical list of group members. 
+        Additionally, all users must mutually authenticate with the group server and get a token before accessing a file server, 
+        allowing for the exchange of the latest group keys. Group keys need to be updated anytime someone is 
+        removed from the group so that specific user may no longer decrypt files updated after their removal from the group. 
+        A new group member will obtain all previous group keys so that they can decrypt files that were encrypted 
+        using an old key. ShareFiles will also now store the index of the key used to encrypt and the size of the last chunk. 
+        This is required because the client needs to know which key on the keyring to use for decryption and truncate the
+        final chunk to the size of the original file. 
+      </p>
+      <p>>Under this approach, a deleted user can still access files that were updated before they were deleted 
+        or removed from the group. This is acceptable because they could have downloaded, decrypted, and stored 
+        the files in plaintext locally at any point before being removed from the group. Since the tokens 
+        expire in 1 hour (5 minutes for the demo), they won’t have access after that period regardless. 
+      </p>
+      <p>Now if Bob creates a file server alpha and Alice stores file f on alpha, Bob cannot read f 
+        because he will not have the group key. Also, the group server does not need to know about file servers. 
+      </p>
+
+    <!-- END CHANGES HERE -->
+  </section>
+  <section id="threat7">
+    <h2>Threat T7: Token Theft</h2>
+    <!-- BEGIN CHANGES HERE -->
+     <p> Under the new threat model, the file server is untrustworthy and may give one user’s
+        token to another user. So, for example, if Alice hands a malicious file server a token, 
+        nothing is preventing the file server from recording the token and giving it to Bob in 
+        our phase 3 implementation. Bob could then use the token to read files from groups 
+        Alice is in or access the group server impersonating Alice. If Alice was an admin, 
+        Bob could also create and delete users and generally wreck the system. To prevent 
+        this from happening we will modify the token to include a field for the intended 
+        recipient in the form of the intended recipient’s RSA public key. This field must 
+        be unique; if we used the server’s name instead, the server would have no way of 
+        knowing whether the token was actually meant for another file server with the same 
+        name. An RSA public key is unique to each server because it is a 2048 value randomly 
+        chosen so collisions are highly unlikely. Each server will verify that the token given 
+        by the user is intended for itself by comparing the public key in the token to its own 
+        before accepting it. 
+     </p>
+     <p>As far as the sequence of events: the user will first go to the group server,
+      mutually authenticate to it, and request a token specifying who the intended recipient
+      by adding the name of the recipient to the request. What will actually be sent over
+      is the request along with the public key of the intended recipient which has been
+      cached locally on the user's machine (this happens the first time the user connects to 
+      a server and is described in detail in the phase 3 writeup). The user will then connect to
+      the intended server and send the token along with the request. The file server will first
+      make sure the token was not modified by checking the signature (if the user changed the
+      recipient they will not be able to re-sign it because they do not have the group server's 
+      private key), then making sure the public key in the token matches its own. If not,
+      the request will be denied. 
+     </p>
+     <p> 
+        Going back to T7, if a malicious file server hands Alice’s key to Bob, 
+        Bob can no longer take the token and use it at another legitimate file server 
+        since a legitimate file server will reject it. Sure, a malicious file server 
+        could ignore the intended recipient and do the file command regardless, but a 
+        malicious file server can just not check the token in the first place anyways. 
+        However, Bob will not be able to use the stolen token at a legitimate file server 
+        or use it to perform group server commands since the group server is trustworthy 
+        and will reject it. A user generating a token intended for the group server and 
+        then giving it to a malicious file server accidentally or deliberately is kind 
+        of a moot point as well because the user could just give someone their own token 
+        or even publish their private RSA key.
+      </p>
+
+    <!-- END CHANGES HERE -->
+  </section>
+  <section id="discussion">
+    <h2>Discussion</h2>
+    <!-- BEGIN CHANGES HERE -->
+    <p>None of the modifications to the protocols affect effectiveness against T1-T4 since the following
+      still hold true: 
+      <ol>
+        <li>T1: Group servers still authenticate users via the Elliptic Curve Diffie Hellman handshake.</li>
+        <li>T2: Tokens are still signed using the group servers private key and file servers still verify 
+            the signature before fulfilling any requests so a user will not be able to modify a token and use it
+            since they do not have the group server's private RSA key.
+        </li>
+        <li>T3: File servers are still authenticated in the same way as T1.</li>
+        <li>T4: All communications are still encrypted during transmission with the same cryptographic 
+          primitives as in phase 3 so
+            a passive listener will not be able to glean any information from messages in transit.</li>
+      </ol>
+      
+    </p>
+
+    <p>The additions of transmission sequencing, tokens being unique to the server and keyrings used to encrypt files on the 
+      File Server are all independent solutions for each new threat. They do not interact a lot in terms of implementation
+      but used in conjunction, these new mechanisms provide a protocol that 
+      effectively protect against each threat while maintaining the same functionality of the previous phase. In terms of
+      our design solving multiple problems at once, sequencing handled both replay and reordering attacks, and the HMAC 
+      was crucial to other parts of the design such as making sure 
+      We initally had the intended recipient field in the token as the server name, not the public key of the server. 
+      This could cause issues as the server name is not unique and thus could be used on multiple servers of the same name.
+      One alternative method of sequencing we considered was passing the number back and forth and checking it against the 
+      internal count, instead of implicitly keeping track of it and verifying it via HMAC.  
+      For the most part, the design process was quick in this phase with all group member finding solutions to the given threats 
+      without much trouble. </p>
+
+    <!-- END CHANGES HERE -->
+  </section>
+</body>
+
+
+</html>

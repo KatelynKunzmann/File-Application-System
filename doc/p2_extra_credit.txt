@@ -1,0 +1,37 @@
+Client Swing Application
+
+We created a GUI version of the client application using Java Swing that showcases all commands as buttons. 
+There are 2 tabs, one for Group Server and one for File Server. Commands are button based, and client and 
+server responses are shown in a gray panel towards the right. 
+
+When each button is pressed, a small window or 2 will pop up prompting for the appropriate information based on 
+what command you have selected.
+    - For the prompts for connecting to both the File Server and Group Server, you will enter the server name
+    in the first window (example: localhost) and then the port number in the second window.
+
+Helpful output will display in the same window to inform you on successes and errors when running the commands.
+To disconnect from the servers, the disconnect button only disconnects the client. The servers will stay running.
+All of the commands are the same as the ClientTerminalApp with the exception of "help" since there are buttons to
+display all commands for the user now and "q", since to exit the application the user can hit the "X" in the top
+right corner.
+
+The following help section still applies except the commands are buttons and items in <> will be popup dialog boxes
+instead. 
+Commands:
+        relog                                                   Re-login to app, perhaps to change accounts.
+        connect <server> <port>                                 Connect to a file or group server at the port specified.
+        disconnect                                              Disconnect current connection to file and/or group server.
+        group commands:                                         Must be connected to group server. Commands other than gettoken require valid token.
+            gettoken                                            Fetch a token for the user that is logged in.
+            cgroup <groupname>                                  Create a group named <groupname>.
+            cuser <username>                                    Create a user named <username>.
+            dgroup <groupname>                                  Delete the group specified by <groupname>.
+            duser <username>                                    Delete the user specified by <username>.
+            adduser <username> <groupname>                      Add user <username> to group <groupname>.
+            ruser <username> <groupname>                        Delete user <username> from group <groupname>.
+            listmembers <groupname>                             List all members of <groupname>.
+        file commands:                                          Must be connected to a file server. Commands require valid tokens
+            download <sourceFile> <destFile>                    Download <sourceFile> from server and saves it as <destFile>.
+            upload   <srcFile> <destFile> <group>               Upload <sourceFile> to file server as a file of <group>.
+            listfiles                                           List all files that the logged in user has access to via their token.
+            delete <filename>                                   Delete file <filename> from server.
